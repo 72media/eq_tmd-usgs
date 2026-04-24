@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SeismoThai — ระบบติดตามแผ่นดินไหว</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg:       #0a0e17;
+      --panel:    #0f1521;
+      --card:     #141c2e;
+      --border:   rgba(255,255,255,0.07);
+      --accent:   #00d4ff;
+      --accent2:  #ff4757;
+      --warn:     #ffa502;
+      --green:    #2ed573;
+      --purple:   #a55eea;
+      --text:     #e8edf5;
+      --muted:    #6b7a96;
+      --glow:     0 0 20px rgba(0,212,255,0.15);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'IBM Plex Sans Thai', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 340px;
+      min-width: 340px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 1000;
+    }
+
+    .sidebar-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #0d1b2e 0%, #0f1521 100%);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .brand-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #0080ff);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 12px rgba(0,212,255,0.4);
+    }
+    .brand-text { line-height: 1.1; }
+    .brand-name { font-size: 1rem; font-weight: 600; color: var(--accent); letter-spacing: 0.05em; }
+    .brand-sub  { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+    #clock-box {
+      background: rgba(0,212,255,0.05);
+      border: 1px solid rgba(0,212,255,0.12);
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #time-display { font-family: 'IBM Plex Mono', monospace; font-size: 1.3rem; font-weight: 600; color: var(--accent); letter-spacing: 0.1em; }
+    #date-display { font-size: 0.72rem; color: var(--muted); text-align: right; line-height: 1.4; }
+
+    /* Scrollable area */
+    .sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+    }
+    .sidebar-body::-webkit-scrollbar { width: 4px; }
+    .sidebar-body::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+    /* Section */
+    .section { margin-bottom: 12px; }
+    .section-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 0 8px 2px;
+    }
+
+    /* Buttons */
+    .btn-row { display: flex; gap: 6px; }
+    .btn {
+      flex: 1;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--card);
+      color: var(--text);
+      font-family: 'IBM Plex Sans Thai', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      width: 100%;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: scale(0.98); }
+    .btn-usgs  { border-color: rgba(0,212,255,0.3); }
+    .btn-usgs:hover  { background: rgba(0,212,255,0.12); border-color: var(--accent); box-shadow: 0 0 10px rgba(0,212,255,0.2); }
+    .btn-tmd   { border-color: rgba(165,94,234,0.3); }
+    .btn-tmd:hover   { background: rgba(165,94,234,0.12); border-color: var(--purple); box-shadow: 0 0 10px rgba(165,94,234,0.2); }
+    .btn-yt    { border-color: rgba(255,71,87,0.3); }
+    .btn-yt:hover    { background: rgba(255,71,87,0.12); border-color: var(--accent2); box-shadow: 0 0 10px rgba(255,71,87,0.2); }
+    .btn-clear { border-color: rgba(255,165,2,0.3); }
+    .btn-clear:hover { background: rgba(255,165,2,0.1); border-color: var(--warn); }
+
+    /* Select */
+    select {
+      width: 100%;
+      padding: 9px 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      font-family: 'IBM Plex Sans Thai', sans-serif;
+      font-size: 0.8rem;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7a96' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    select:focus { outline: none; border-color: rgba(0,212,255,0.4); }
+    select option { background: var(--panel); }
+
+    /* File input */
+    .file-label {
+      display: block;
+      padding: 9px 10px;
+      background: var(--card);
+      border: 1px dashed rgba(255,255,255,0.12);
+      border-radius: 7px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.18s;
+    }
+    .file-label:hover { border-color: rgba(0,212,255,0.4); color: var(--accent); }
+    input[type="file"] { display: none; }
+
+    /* Toggles */
+    .toggle-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+    }
+    .toggle-label { display: flex; align-items: center; gap: 7px; color: var(--text); }
+    .toggle-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    .switch { position: relative; width: 36px; height: 20px; display: inline-block; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .sw-track {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background 0.25s;
+    }
+    .sw-track::before {
+      content: '';
+      position: absolute;
+      left: 3px; top: 3px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.25s;
+    }
+    input:checked + .sw-track { background: var(--accent); }
+    input:checked + .sw-track::before { transform: translateX(16px); }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .stat-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .stat-val { font-family: 'IBM Plex Mono', monospace; font-size: 1.15rem; font-weight: 600; }
+    .sv-count  { color: var(--accent); }
+    .sv-mag    { color: var(--accent2); }
+    .sv-depth  { color: var(--warn); }
+    .sv-time   { font-size: 0.7rem; color: var(--green); }
+
+    /* Loading */
+    #loading {
+      display: none;
+      text-align: center;
+      padding: 10px;
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 7px;
+      font-size: 0.8rem;
+      color: var(--accent);
+      margin-bottom: 8px;
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+    /* Event list */
+    #event-list { display: flex; flex-direction: column; gap: 5px; }
+
+    .event-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid transparent;
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.18s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .event-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); }
+    .event-item.active { border-left-color: var(--accent); background: rgba(0,212,255,0.06); }
+
+    .mag-badge {
+      min-width: 32px; height: 32px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 600;
+      font-size: 0.78rem;
+    }
+    .mag-1 { background: rgba(46,213,115,0.2);  color: #2ed573; }
+    .mag-2 { background: rgba(255,212,59,0.2);  color: #ffd43b; }
+    .mag-3 { background: rgba(255,165,2,0.2);   color: #ffa502; }
+    .mag-4 { background: rgba(255,107,53,0.2);  color: #ff6b35; }
+    .mag-5 { background: rgba(255,71,87,0.2);   color: #ff4757; }
+    .mag-6 { background: rgba(255,71,87,0.35);  color: #ff4757; }
+    .mag-7 { background: rgba(255,71,87,0.5);   color: #fff; }
+
+    .event-info { flex: 1; min-width: 0; }
+    .event-place { font-size: 0.82rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+    .event-meta  { font-size: 0.7rem; color: var(--muted); display: flex; gap: 8px; }
+
+    /* YouTube panel */
+    #youtubeLivePanel {
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+    #youtubeLivePanel iframe { width: 100%; height: 190px; border: none; display: block; }
+    .yt-close-btn {
+      width: 100%; padding: 6px; background: rgba(255,71,87,0.15); border: none;
+      color: var(--muted); font-size: 0.72rem; cursor: pointer; text-align: center;
+      font-family: 'IBM Plex Sans Thai', sans-serif;
+      transition: background 0.2s;
+    }
+    .yt-close-btn:hover { background: rgba(255,71,87,0.3); color: #fff; }
+
+    /* Map */
+    #map { flex: 1; }
+
+    /* Popups */
+    .leaflet-popup-content-wrapper {
+      background: #0f1521 !important;
+      border: 1px solid rgba(0,212,255,0.2) !important;
+      border-radius: 10px !important;
+      color: var(--text) !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
+    }
+    .leaflet-popup-tip { background: #0f1521 !important; }
+    .leaflet-popup-content { font-family: 'IBM Plex Sans Thai', sans-serif !important; }
+
+    .popup-inner { min-width: 220px; }
+    .popup-title { font-size: 0.95rem; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
+    .popup-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 0.8rem; }
+    .popup-key  { color: var(--muted); }
+    .popup-mag  { color: var(--accent2); font-family: 'IBM Plex Mono', monospace; font-size: 1rem; font-weight: 600; }
+    .popup-sub  { font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+
+    .popup-link {
+      display: inline-block; margin-top: 8px;
+      padding: 4px 10px; background: rgba(0,212,255,0.12);
+      border: 1px solid rgba(0,212,255,0.3); border-radius: 5px;
+      color: var(--accent) !important; font-size: 0.75rem; text-decoration: none;
+      transition: background 0.2s;
+    }
+    .popup-link:hover { background: rgba(0,212,255,0.22); }
+
+    .graph-frame { margin-top: 10px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .graph-frame img { width: 100%; display: block; cursor: zoom-in; }
+    .rshake-iframe-container {
+      margin-top: 10px;
+      border: 1px solid rgba(165,94,234,0.3);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+      width: 100%;
+      padding-bottom: 75%;
+      height: 0;
+    }
+    .rshake-iframe-container iframe {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      overflow: hidden;
+    }
+
+    /* Fullscreen dialog */
+    dialog#fullscreenDialog {
+      border: none; padding: 0;
+      background: transparent;
+      max-width: 100vw; max-height: 100vh;
+      width: fit-content;
+      /* Force center — overrides browser default top-left positioning */
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      margin: 0;
+    }
+    dialog::backdrop { background: rgba(0,0,0,0.88); }
+    .dlg-close {
+      position: fixed;
+      top: 16px; right: 20px;
+      font-size: 26px; color: #fff;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.2s;
+      z-index: 9999;
+    }
+    .dlg-close:hover { background: rgba(255,71,87,0.7); }
+
+    /* Divider */
+    .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      #sidebar { width: 100%; min-width: unset; height: 45vh; }
+      #map { height: 55vh; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="sidebar-header">
+    <div class="brand">
+      <div class="brand-icon">🌏</div>
+      <div class="brand-text">
+        <div class="brand-name">SeismoThai</div>
+        <div class="brand-sub">Earthquake Monitoring System</div>
+      </div>
+    </div>
+    <div id="clock-box">
+      <div id="time-display">--:--:--</div>
+      <div id="date-display">—</div>
+    </div>
+  </div>
+
+  <div class="sidebar-body">
+
+    <!-- Data Sources -->
+    <div class="section">
+      <div class="section-label">แหล่งข้อมูล</div>
+      <div class="btn-row">
+        <button class="btn btn-usgs" id="load-usgs">🌍 USGS</button>
+        <button class="btn btn-tmd"  id="load-tmd">🌍 TMD</button>
+      </div>
+    </div>
+
+    <!-- Layers -->
+    <div class="section">
+      <div class="section-label">เลเยอร์แผนที่</div>
+      <div class="toggle-card">
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <div class="toggle-dot" style="background:#00bcd4"></div>
+            ทุ่นสึนามิ (2 จุด)
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-tsunami" checked><span class="sw-track"></span></label>
+        </div>
+        <div class="divider"></div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <div class="toggle-dot" style="background:var(--purple)"></div>
+            สถานีตรวจวัดแผ่นดินไหว
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-station" checked><span class="sw-track"></span></label>
+        </div>
+        <div class="divider"></div>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <div class="toggle-dot" style="background:#e91e63"></div>
+            Raspberry Shake (9 สถานี)
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-rshake" checked><span class="sw-track"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Type -->
+    <div class="section">
+      <div class="section-label">ประเภทแผนที่</div>
+      <select id="map-type">
+        <option value="googleHybrid">Google Hybrid (ดาวเทียม + ถนน)</option>
+        <option value="topo">OpenTopoMap (ภูมิประเทศ)</option>
+        <option value="satellite">Esri Satellite</option>
+      </select>
+    </div>
+
+    <!-- Files -->
+    <div class="section">
+      <div class="section-label">นำเข้าข้อมูล</div>
+      <label class="file-label">
+        📂 นำเข้าแนวรอยเลื่อน (GeoJSON)
+        <input type="file" id="gpxInput" accept=".geojson,.json">
+      </label>
+      <div style="height:6px"></div>
+      <label class="file-label">
+        📊 นำเข้าแผ่นดินไหวจาก Excel
+        <input type="file" id="excelInput" accept=".xlsx,.xls,.xml">
+      </label>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <div class="btn-row">
+        <button class="btn btn-yt" id="live-monitor-btn">▶ Live YouTube</button>
+        <button class="btn btn-clear" id="clear-data">🗑 ล้างข้อมูล</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <div class="section-label">สถิติ</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">เหตุการณ์</div>
+          <div class="stat-val sv-count" id="stat-count">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">ขนาดสูงสุด</div>
+          <div class="stat-val sv-mag" id="stat-max">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">ความลึกเฉลี่ย</div>
+          <div class="stat-val sv-depth" id="stat-depth">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">อัพเดตล่าสุด</div>
+          <div class="stat-val sv-time" id="stat-update">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading">⏳ กำลังโหลดข้อมูล...</div>
+    <div id="event-list"></div>
+  </div>
+
+  <!-- YouTube panel at bottom of sidebar -->
+  <div id="youtubeLivePanel">
+    <button class="yt-close-btn" id="closeYoutubeBtn">✕ ปิดวิดีโอ</button>
+    <iframe id="youtubeFrame" src="about:blank" title="Live Earthquake Monitoring"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<dialog id="fullscreenDialog">
+  <button class="dlg-close" onclick="document.getElementById('fullscreenDialog').close()">✕</button>
+  <img id="fullscreenImage" src="" style="
+    display: block;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: auto;
+    height: auto;
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+  ">
+</dialog>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+<script>
+window.addEventListener('load', function() {
+// ── CONFIG ──
+const TMD_FEED_URL  = "https://earthquake.tmd.go.th/feed/rss_tmd.xml";
+const USGS_FEED_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson";
+const PROXY_LIST = [
+  "https://corsproxy.io/?url=",
+  "https://api.allorigins.win/raw?url=",
+  "https://api.codetabs.com/v1/proxy?quest=",
+  "https://thingproxy.freeboard.io/fetch/",
+];
+
+// ── ICONS ──
+const mkIcon = (url, size) => L.icon({ iconUrl: url, iconSize: [size,size], iconAnchor: [size/2,size], popupAnchor: [0,-size] });
+const quakeIcon   = mkIcon('https://maphub.net/media/markers/b/mo/bmoqwdmaegtllls8/80.png', 30);
+const tsunamiIcon = mkIcon('https://maphub.net/media/markers/3/ge/3geqzkryfqwmgmiu/80.png', 32);
+const stationIcon = mkIcon('https://maphub.net/media/markers/5/ub/5ub2ccvazhf9fpb4/80.png', 32);
+const rshakeIcon  = mkIcon('https://community.raspberryshake.org/uploads/default/original/1X/070628f04b3a539f517a13333853afafad6060ae.png', 28);
+
+// ── STATIC DATA ──
+const tsunamiBuoys = [
+  { lat: 8.86, lng: 88.55, name: "ทุ่นสึนามิ 23401", description: "ห่างจากภูเก็ตไปทิศตะวันตก 965 กม.", graph: "https://www.ndbc.noaa.gov/plot?station=23401&meas=hght&uom=M&width=1000&height=550" },
+  { lat: 9.541, lng: 95.668, name: "ทุ่นสึนามิ 23461", description: "ห่างจากภูเก็ตไปทิศตะวันตก 340 กม.", graph: "https://www.ndbc.noaa.gov/plot?station=23461&meas=hght&uom=M&width=1000&height=550" }
+];
+
+const seismicStations = [
+  { lat: 19.7804, lng: 96.1408, name: "สถานีเนปิดอร์ (เมียนมาร์)", description: "สถานีตรวจวัดแผ่นดินไหวเมียนมาร์", graph: "https://geofon.gfz.de/waveform/qplot/NPW.active.png" },
+  { lat: 5.18388, lng: 97.1385, name: "สถานีลกเซอมาเว (สุมาตรา)", description: "สถานีตรวจวัดสุมาตราเหนือ", graph: "https://geofon.gfz.de/waveform/qplot/LHMI.active.png" }
+];
+
+const raspberryShakeStations = [
+  { lat: 3.5766,  lng: 98.6615,  name: "🍓 เมดาน",   code: "AM.R1DA1", description: "เมืองเมดาน ประเทศอินโดนีเซีย",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=R1DA1",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/R1DA1/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/R1DA1/00/EHZ" },
+  { lat: 6.9099,  lng: 100.5412, name: "🍓 หาดใหญ่",  code: "AM.RD0A1", description: "อ.หาดใหญ่ จ.สงขลา",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=RD0A1",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/RD0A1/00/SHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/RD0A1/00/SHZ" },
+  { lat: 10.7207, lng: 99.3752,  name: "🍓 ชุมพร",    code: "AM.R3035", description: "จังหวัดชุมพร",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=R3035",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/R3035/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/R3035/00/EHZ" },
+  { lat: 7.9279,  lng: 98.3289,  name: "🍓 ภูเก็ต",   code: "AM.S6BA1", description: "จังหวัดภูเก็ต",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=S6BA1",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/S6BA1/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/S6BA1/00/EHZ" },
+  // ── สถานีใหม่ในประเทศไทย (พิกัดดึงจาก FDSN API อัตโนมัติ) ──
+  { lat: null, lng: null, name: "🍓 กรุงเทพ",  code: "AM.RCF94", description: "จังหวัดกรุงเทพ",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=RCF94",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/RCF94/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/RCF94/00/EHZ" },
+  { lat: null, lng: null, name: "🍓 กาฬสินธุ์",  code: "AM.R54F5", description: "จังหวัดกาฬสินธุ์",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=R54F5",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/R54F5/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/R54F5/00/EHZ" },
+  { lat: null, lng: null, name: "🍓 อุตรดิตถ์",  code: "AM.R0ED0", description: "จังหวัดอุตรดิตถ์",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=R0ED0",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/R0ED0/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/R0ED0/00/EHZ" },
+  { lat: null, lng: null, name: "🍓 เชียงใหม่",  code: "AM.RE262", description: "จังหวัดเชียงใหม่",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=RE262",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/RE262/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/RE262/00/EHZ" },
+  { lat: null, lng: null, name: "🍓 เชียงแสน",  code: "AM.RFB8B", description: "จังหวัดเชียงราย",
+    link: "https://stationview.raspberryshake.org/#/?zoom=8&net=AM&sta=RFB8B",
+    iframeUrl: "https://dataview.raspberryshake.org/#/embed/AM/RFB8B/00/EHZ",
+    stationViewUrl: "https://dataview.raspberryshake.org/#/AM/RFB8B/00/EHZ" }
+];
+
+// ── MAP SETUP ──
+const map = L.map('map', { preferCanvas: true }).setView([13.7, 100.5], 5);
+const baseLayers = {
+  googleHybrid: L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { attribution: '© Google', maxZoom: 20 }),
+  topo:         L.tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png',         { attribution: '© OpenTopoMap (CC-BY-SA)', maxZoom: 17 }),
+  satellite:    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 })
+};
+baseLayers.googleHybrid.addTo(map);
+
+const markerCluster = L.markerClusterGroup({ maxClusterRadius: 50 });
+const faultLineLayer = L.layerGroup().addTo(map);
+const tsunamiLayer   = L.layerGroup().addTo(map);
+const stationLayer   = L.layerGroup().addTo(map);
+const rshakeLayer    = L.layerGroup().addTo(map);
+map.addLayer(markerCluster);
+
+// ── HELPERS ──
+function formatThaiTime(v) {
+  if (!v) return "ไม่ระบุ";
+  try {
+    let d = new Date(v);
+    if (isNaN(d)) {
+      const m = String(v).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+      if (m) d = new Date(Date.UTC(m[1],m[2]-1,m[3],m[4],m[5],m[6]));
+      else return v;
+    }
+    return isNaN(d) ? v : d.toLocaleString('th-TH', { timeZone:'Asia/Bangkok', day:'2-digit', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit' }) + " น.";
+  } catch { return v; }
+}
+
+function getMagClass(m) {
+  if (m < 2) return 'mag-1';
+  if (m < 3) return 'mag-2';
+  if (m < 4) return 'mag-3';
+  if (m < 5) return 'mag-4';
+  if (m < 6) return 'mag-5';
+  if (m < 7) return 'mag-6';
+  return 'mag-7';
+}
+
+function updateStats(events) {
+  document.getElementById('stat-count').textContent = events.length;
+  if (events.length) {
+    const mags = events.map(e => e.magnitude), depths = events.map(e => e.depth);
+    document.getElementById('stat-max').textContent   = Math.max(...mags).toFixed(1);
+    document.getElementById('stat-depth').textContent = (depths.reduce((a,b)=>a+b,0)/depths.length).toFixed(1) + " กม.";
+  } else {
+    document.getElementById('stat-max').textContent   = '—';
+    document.getElementById('stat-depth').textContent = '—';
+  }
+  document.getElementById('stat-update').textContent = new Date().toLocaleTimeString('th-TH');
+}
+
+function renderData(events) {
+  markerCluster.clearLayers();
+  const list = document.getElementById('event-list');
+  list.innerHTML = '';
+  events.forEach(evt => {
+    const linkBtn = evt.link ? `<a href="${evt.link}" target="_blank" class="popup-link">🔗 ดูรายละเอียด</a>` : '';
+    const popup = `
+      <div class="popup-inner">
+        <div class="popup-title">${evt.place || "ไม่ระบุสถานที่"}</div>
+        <div class="popup-grid">
+          <span class="popup-key">ขนาด</span><span class="popup-mag">${evt.magnitude}</span>
+          <span class="popup-key">ความลึก</span><span>${evt.depth} กม.</span>
+          <span class="popup-key">เวลา</span><span>${formatThaiTime(evt.time)}</span>
+        </div>
+        ${evt.details ? `<div class="popup-sub">${evt.details}</div>` : ''}
+        ${linkBtn}
+      </div>`;
+    const marker = L.marker([evt.lat, evt.lng], { icon: quakeIcon }).bindPopup(popup);
+    markerCluster.addLayer(marker);
+
+    const item = document.createElement('div');
+    item.className = 'event-item';
+    item.innerHTML = `
+      <div class="mag-badge ${getMagClass(evt.magnitude)}">${evt.magnitude}</div>
+      <div class="event-info">
+        <div class="event-place">${evt.place || "ไม่ระบุสถานที่"}</div>
+        <div class="event-meta">
+          <span>⏱ ${formatThaiTime(evt.time)}</span>
+          <span>📉 ${evt.depth} กม.</span>
+        </div>
+      </div>`;
+    item.onclick = () => {
+      map.setView([evt.lat, evt.lng], 10);
+      marker.openPopup();
+      document.querySelectorAll('.event-item').forEach(el => el.classList.remove('active'));
+      item.classList.add('active');
+    };
+    list.appendChild(item);
+  });
+  if (events.length && markerCluster.getBounds().isValid())
+    map.fitBounds(markerCluster.getBounds(), { padding: [50,50] });
+  updateStats(events);
+}
+
+// ── STATIC MARKERS ──
+function makeRshakePopup(st) {
+  return `
+    <div class="popup-inner" style="max-width:480px">
+      <div class="popup-title" style="color:#e91e63">${st.name}</div>
+      <div class="popup-sub">${st.description} · รหัส: <b>${st.code}</b></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <a href="${st.link}" target="_blank" class="popup-link">🔗 StationView</a>
+        <a href="${st.stationViewUrl}" target="_blank" class="popup-link" style="border-color:rgba(165,94,234,0.4);color:#a55eea">📊 DataView</a>
+      </div>
+      <div class="rshake-iframe-container">
+        <iframe src="${st.iframeUrl}" loading="lazy" scrolling="no" allowfullscreen title="${st.code}"></iframe>
+      </div>
+      <div class="popup-sub" style="text-align:center;margin-top:4px">Real-time DataView</div>
+    </div>`;
+}
+
+async function fetchStationCoords(staCode) {
+  // staCode format: "AM.RCF94" → net=AM, sta=RCF94
+  const [net, sta] = staCode.split('.');
+  try {
+    const res = await fetch(
+      `https://data.raspberryshake.org/fdsnws/station/1/query?format=text&level=station&network=${net}&station=${sta}`
+    );
+    if (!res.ok) return null;
+    const text = await res.text();
+    const lines = text.split('\n').filter(l => l && !l.startsWith('#'));
+    if (!lines.length) return null;
+    // last line = most recent epoch
+    const cols = lines[lines.length - 1].split('|');
+    const lat = parseFloat(cols[2]), lng = parseFloat(cols[3]);
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng, siteName: cols[5] || '' };
+  } catch { return null; }
+}
+
+async function initStaticMarkers() {
+  tsunamiBuoys.forEach(b => {
+    L.marker([b.lat, b.lng], { icon: tsunamiIcon })
+      .bindPopup(`<div class="popup-inner"><div class="popup-title" style="color:#00bcd4">${b.name}</div><div class="popup-sub">${b.description}</div><div class="graph-frame"><img src="${b.graph}" class="fullscreen-trigger" alt="กราฟคลื่น"></div><div class="popup-sub">(คลิกที่รูปเพื่อขยาย)</div></div>`)
+      .addTo(tsunamiLayer);
+  });
+  seismicStations.forEach(s => {
+    L.marker([s.lat, s.lng], { icon: stationIcon })
+      .bindPopup(`<div class="popup-inner"><div class="popup-title" style="color:#a55eea">${s.name}</div><div class="popup-sub">${s.description}</div><div class="graph-frame"><img src="${s.graph}" class="fullscreen-trigger" alt="Seismogram"></div><div class="popup-sub">(คลิกที่รูปเพื่อขยาย)</div></div>`)
+      .addTo(stationLayer);
+  });
+
+  // Process each Raspberry Shake station — fetch coords if needed
+  for (const st of raspberryShakeStations) {
+    if (st.lat !== null && st.lng !== null) {
+      // Known coords → add immediately
+      L.marker([st.lat, st.lng], { icon: rshakeIcon })
+        .bindPopup(makeRshakePopup(st), { maxWidth: 500 })
+        .addTo(rshakeLayer);
+    } else {
+      // Unknown coords → fetch from FDSN, then add marker
+      const coords = await fetchStationCoords(st.code);
+      if (coords) {
+        st.lat = coords.lat;
+        st.lng = coords.lng;
+        // Update name with site info if available
+        if (coords.siteName && !coords.siteName.toLowerCase().includes('citizen')) {
+          st.description = coords.siteName + ' · ' + st.description;
+        }
+        L.marker([st.lat, st.lng], { icon: rshakeIcon })
+          .bindPopup(makeRshakePopup(st), { maxWidth: 500 })
+          .addTo(rshakeLayer);
+      } else {
+        // Fallback: place a marker at center of Thailand with warning
+        console.warn(`ไม่สามารถดึงพิกัดสถานี ${st.code}`);
+        const fallbackLat = 13.0 + Math.random() * 5;
+        const fallbackLng = 100.0 + Math.random() * 3;
+        const stCopy = { ...st, lat: fallbackLat, lng: fallbackLng,
+          description: `⚠️ พิกัดยังไม่แน่นอน · ${st.description}` };
+        L.marker([fallbackLat, fallbackLng], { icon: rshakeIcon })
+          .bindPopup(makeRshakePopup(stCopy), { maxWidth: 500 })
+          .addTo(rshakeLayer);
+      }
+    }
+  }
+}
+
+// ── DATA LOADERS ──
+async function loadDataFromUSGS() {
+  const ldg = document.getElementById('loading');
+  ldg.style.display = 'block'; ldg.textContent = '🌍 กำลังโหลดข้อมูล USGS...';
+  try {
+    const res = await fetch(USGS_FEED_URL);
+    const data = await res.json();
+    const events = data.features.map(f => ({
+      lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0],
+      depth: f.geometry.coordinates[2], magnitude: f.properties.mag,
+      place: f.properties.place, time: f.properties.time,
+      details: "USGS Feed", link: f.properties.url
+    }));
+    renderData(events);
+  } catch { alert("❌ ไม่สามารถดึงข้อมูล USGS"); }
+  ldg.style.display = 'none';
+}
+
+async function loadDataFromTMD() {
+  const ldg = document.getElementById('loading');
+  ldg.style.display = 'block'; ldg.textContent = '🇹🇭 กำลังเชื่อมต่อ TMD...';
+  let xmlText = null;
+  for (const proxy of PROXY_LIST) {
+    try {
+      const r = await fetch(proxy + encodeURIComponent(TMD_FEED_URL));
+      if (r.ok) { xmlText = await r.text(); break; }
+    } catch {}
+  }
+  if (!xmlText) { ldg.style.display = 'none'; alert('❌ ไม่สามารถดึงข้อมูล TMD ได้ กรุณาใช้ไฟล์ Excel'); return; }
+  try {
+    const xml = new DOMParser().parseFromString(xmlText, "text/xml");
+    const items = xml.getElementsByTagName("item");
+    const events = [];
+
+    // Helper: tries localName match across all namespaces (handles geo:lat, tmd:depth etc.)
+    const getTag = (item, localName) => {
+      // 1. direct match (no prefix)
+      let el = item.getElementsByTagName(localName)[0];
+      if (el) return el.textContent.trim();
+      // 2. namespace-prefixed variants
+      const prefixes = ['geo', 'tmd'];
+      for (const p of prefixes) {
+        el = item.getElementsByTagName(`${p}:${localName}`)[0];
+        if (el) return el.textContent.trim();
+      }
+      // 3. getElementsByTagNameNS wildcard
+      const nsMap = {
+        lat:       'http://www.w3.org/2003/01/geo/',
+        long:      'http://www.w3.org/2003/01/geo/',
+        depth:     'http://www.earthquake.tmd.go.th',
+        magnitude: 'http://www.earthquake.tmd.go.th',
+        time:      'http://www.earthquake.tmd.go.th',
+      };
+      if (nsMap[localName]) {
+        el = item.getElementsByTagNameNS(nsMap[localName], localName)[0];
+        if (el) return el.textContent.trim();
+      }
+      return null;
+    };
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const lat = parseFloat(getTag(item, 'lat'));
+      const lng = parseFloat(getTag(item, 'long'));
+      if (isNaN(lat) || isNaN(lng)) continue;
+
+      const mag   = parseFloat(getTag(item, 'magnitude'));
+      const depth = parseFloat(getTag(item, 'depth'));
+      const place = getTag(item, 'title') || 'ไม่ระบุสถานที่';
+      const link  = getTag(item, 'link')  || '';
+
+      let timeStr = getTag(item, 'time');
+      if (timeStr) {
+        // "2026-04-23 21:23:01 UTC" → ISO
+        timeStr = timeStr.replace(' UTC','').trim().replace(' ','T') + 'Z';
+      } else {
+        // fallback: use pubDate
+        const pub = getTag(item, 'pubDate');
+        timeStr = pub ? new Date(pub).toISOString() : new Date().toISOString();
+      }
+
+      const details = getTag(item, 'comments') || '';
+      events.push({ lat, lng, magnitude: isNaN(mag)?0:mag, depth: isNaN(depth)?0:depth, place, time: timeStr, details, link });
+    }
+    events.length ? renderData(events) : alert("ไม่พบข้อมูลใน XML TMD");
+  } catch(e) { console.error(e); alert("❌ XML TMD ผิดพลาด: " + e.message); }
+  ldg.style.display = 'none';
+}
+
+// ── EXCEL IMPORT ──
+function parseXMLExcel(xmlString) {
+  const xml = new DOMParser().parseFromString(xmlString, "text/xml");
+  if (xml.querySelector("parseerror,parsererror")) throw new Error("XML ไม่ถูกต้อง");
+  const wb = xml.getElementsByTagNameNS("urn:schemas-microsoft-com:office:spreadsheet","Workbook")[0] || xml.getElementsByTagName("Workbook")[0];
+  const ws = wb.getElementsByTagName("Worksheet")[0];
+  const tbl = ws.getElementsByTagName("Table")[0];
+  const rows = tbl.getElementsByTagName("Row");
+  if (rows.length < 2) throw new Error("ไม่มีข้อมูล");
+  const hdr = rows[0].getElementsByTagName("Cell");
+  const idx = {};
+  for (let i = 0; i < hdr.length; i++) {
+    const d = hdr[i].getElementsByTagName("Data")[0];
+    if (!d) continue;
+    const t = d.textContent.trim().toUpperCase();
+    if (t.includes("LAT")) idx.lat = i;
+    else if (t.includes("LONG")||t.includes("LON")) idx.lng = i;
+    else if (t.includes("MAG")) idx.mag = i;
+    else if (t.includes("DEPTH")) idx.depth = i;
+    else if (t.includes("DATE-TIME UTC")) idx.timeUTC = i;
+    else if (t.includes("DATE-TIME THAI")) idx.timeThai = i;
+    else if (t==="REGION."||t.includes("REGION")) idx.region = i;
+    else if (t.includes("DETAIL")) idx.detail = i;
+  }
+  if (idx.lat===undefined) idx.lat=5;
+  if (idx.lng===undefined) idx.lng=6;
+  if (idx.mag===undefined) idx.mag=7;
+  if (idx.depth===undefined) idx.depth=8;
+  if (idx.timeUTC===undefined&&idx.timeThai===undefined) idx.timeUTC=3;
+  const events = [];
+  for (let r = 1; r < rows.length; r++) {
+    const cells = rows[r].getElementsByTagName("Cell");
+    const getV = i => { if(i>=cells.length) return null; const d=cells[i].getElementsByTagName("Data")[0]; return d?d.textContent.trim():null; };
+    const lat = parseFloat(getV(idx.lat)), lng = parseFloat(getV(idx.lng));
+    if (isNaN(lat)||isNaN(lng)) continue;
+    let mag = parseFloat(getV(idx.mag)); if(isNaN(mag)) mag=0;
+    let depth = parseFloat(getV(idx.depth)); if(isNaN(depth)) depth=0;
+    let timeStr = getV(idx.timeUTC)||getV(idx.timeThai);
+    let isoTime = null;
+    if (timeStr) {
+      const m = timeStr.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+      isoTime = m ? new Date(Date.UTC(m[1],m[2]-1,m[3],m[4],m[5],m[6])).toISOString() : (d=new Date(timeStr),isNaN(d)?null:d.toISOString());
+    }
+    events.push({ lat, lng, magnitude: mag, depth, place: getV(idx.region)||"นำเข้าจาก Excel", time: isoTime||new Date().toISOString(), details: getV(idx.detail)||"", link:"" });
+  }
+  return events;
+}
+
+async function importExcelData(file) {
+  const ldg = document.getElementById('loading');
+  ldg.style.display = 'block'; ldg.textContent = '📊 กำลังอ่านไฟล์...';
+  const ext = file.name.split('.').pop().toLowerCase();
+  try {
+    if (ext==='xml'||ext==='xls') {
+      const text = await file.text();
+      if (text.includes('<Workbook')) {
+        const events = parseXMLExcel(text);
+        if (!events.length) throw new Error("ไม่มีข้อมูลพิกัด");
+        renderData(events);
+        alert(`✅ นำเข้า ${events.length} รายการสำเร็จ`);
+        ldg.style.display = 'none'; return;
+      }
+      throw new Error("ไม่ใช่ Excel XML 2003");
+    }
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:"" });
+    if (!rows||rows.length<2) throw new Error("ไม่มีข้อมูล");
+    const headers = rows[0].map(h=>String(h).trim().toUpperCase());
+    const fi = p => headers.findIndex(h=>p.some(x=>h.includes(x)));
+    const latI=fi(['LAT','ละติจูด']),lngI=fi(['LONG','LON','ลองจิจูด']),magI=fi(['MAG','ขนาด']),depI=fi(['DEPTH','ความลึก']),timI=fi(['DATE-TIME UTC','DATE-TIME THAI','เวลา']),plcI=fi(['REGION','สถานที่']),dtlI=fi(['DETAIL','รายละเอียด']);
+    if (latI<0||lngI<0) throw new Error("ไม่พบคอลัมน์พิกัด");
+    const events = [];
+    for (let i=1;i<rows.length;i++) {
+      const row=rows[i];
+      const lat=parseFloat(row[latI]),lng=parseFloat(row[lngI]);
+      if(isNaN(lat)||isNaN(lng)) continue;
+      let mag=magI>=0?parseFloat(row[magI]):0; if(isNaN(mag)) mag=0;
+      let depth=depI>=0?parseFloat(row[depI]):0; if(isNaN(depth)) depth=0;
+      let isoTime=null;
+      if(timI>=0&&row[timI]) {
+        let d=new Date(row[timI]);
+        if(isNaN(d)){const m=String(row[timI]).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);if(m)d=new Date(Date.UTC(m[1],m[2]-1,m[3],m[4],m[5],m[6]));}
+        if(!isNaN(d)) isoTime=d.toISOString();
+      }
+      events.push({ lat, lng, magnitude:mag, depth, place:plcI>=0?(row[plcI]||"นำเข้าจาก Excel"):"นำเข้าจาก Excel", time:isoTime||new Date().toISOString(), details:dtlI>=0?(row[dtlI]||""):"", link:"" });
+    }
+    if (!events.length) throw new Error("ไม่มีข้อมูลพิกัด");
+    renderData(events);
+    alert(`✅ นำเข้า ${events.length} รายการสำเร็จ`);
+  } catch(e) { alert(`❌ ${e.message}`); }
+  ldg.style.display = 'none';
+}
+
+// ── EVENT LISTENERS ──
+document.getElementById('load-usgs').addEventListener('click', loadDataFromUSGS);
+document.getElementById('load-tmd').addEventListener('click', loadDataFromTMD);
+document.getElementById('clear-data').addEventListener('click', () => {
+  markerCluster.clearLayers();
+  faultLineLayer.clearLayers();
+  document.getElementById('event-list').innerHTML = '';
+  updateStats([]);
+  document.getElementById('gpxInput').value = '';
+  document.getElementById('excelInput').value = '';
+});
+document.getElementById('map-type').addEventListener('change', e => {
+  Object.values(baseLayers).forEach(l => map.removeLayer(l));
+  baseLayers[e.target.value].addTo(map);
+});
+document.getElementById('gpxInput').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = ev => {
+    try { faultLineLayer.clearLayers(); L.geoJSON(JSON.parse(ev.target.result), { style:{color:'#ff4757',weight:3} }).addTo(faultLineLayer); alert("โหลด GeoJSON สำเร็จ"); }
+    catch { alert("GeoJSON ไม่ถูกต้อง"); }
+  };
+  fr.readAsText(f);
+});
+document.getElementById('excelInput').addEventListener('change', e => { if(e.target.files.length) importExcelData(e.target.files[0]); });
+
+// YouTube toggle
+const ytPanel = document.getElementById('youtubeLivePanel');
+const ytFrame = document.getElementById('youtubeFrame');
+const YT_URL  = "https://www.youtube.com/embed/rvtygG4n6ew?enablejsapi=1&autoplay=1";
+document.getElementById('live-monitor-btn').addEventListener('click', () => {
+  if (ytPanel.style.display !== 'block') {
+    ytFrame.src = "about:blank";
+    setTimeout(() => { ytFrame.src = YT_URL; }, 100);
+    ytPanel.style.display = 'block';
+  } else {
+    ytPanel.style.display = 'none';
+    ytFrame.src = "about:blank";
+  }
+});
+document.getElementById('closeYoutubeBtn').addEventListener('click', () => {
+  ytPanel.style.display = 'none';
+  ytFrame.src = "about:blank";
+});
+
+// Layer toggles
+document.getElementById('toggle-tsunami').addEventListener('change', e => e.target.checked ? map.addLayer(tsunamiLayer) : map.removeLayer(tsunamiLayer));
+document.getElementById('toggle-station').addEventListener('change', e => e.target.checked ? map.addLayer(stationLayer) : map.removeLayer(stationLayer));
+document.getElementById('toggle-rshake').addEventListener('change', e => e.target.checked ? map.addLayer(rshakeLayer) : map.removeLayer(rshakeLayer));
+
+// Fullscreen image
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('fullscreen-trigger')) {
+    document.getElementById('fullscreenImage').src = e.target.src;
+    document.getElementById('fullscreenDialog').showModal();
+  }
+});
+
+// Clock
+setInterval(() => {
+  const now = new Date();
+  document.getElementById('time-display').textContent = now.toLocaleTimeString('th-TH');
+  const d = now.toLocaleDateString('th-TH', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+  document.getElementById('date-display').innerHTML = d.replace(' ', '<br>');
+}, 1000);
+
+initStaticMarkers();
+}); // end window.addEventListener('load')
+</script>
+</body>
+</html>
