@@ -132,6 +132,8 @@
     .btn-tmd:hover   { background: rgba(165,94,234,0.12); border-color: var(--purple); box-shadow: 0 0 10px rgba(165,94,234,0.2); }
     .btn-yt    { border-color: rgba(255,71,87,0.3); }
     .btn-yt:hover    { background: rgba(255,71,87,0.12); border-color: var(--accent2); box-shadow: 0 0 10px rgba(255,71,87,0.2); }
+    .btn-jquake { border-color: rgba(255,165,2,0.3); }
+    .btn-jquake:hover { background: rgba(255,165,2,0.12); border-color: var(--warn); box-shadow: 0 0 10px rgba(255,165,2,0.2); }
     .btn-clear { border-color: rgba(255,165,2,0.3); }
     .btn-clear:hover { background: rgba(255,165,2,0.1); border-color: var(--warn); }
 
@@ -467,11 +469,12 @@
       </label>
     </div>
 
-    <!-- Actions -->
+    <!-- Live YouTube -->
     <div class="section">
+      <div class="section-label">📺 Live Monitoring</div>
       <div class="btn-row">
-        <button class="btn btn-yt" id="live-monitor-btn">▶ Live YouTube</button>
-        <button class="btn btn-clear" id="clear-data">🗑 ล้างข้อมูล</button>
+        <button class="btn btn-yt" id="btn-globalquake">▶ GlobalQuake</button>
+        <button class="btn btn-yt btn-jquake" id="btn-jquake">▶ JQuake</button>
       </div>
     </div>
 
@@ -500,13 +503,21 @@
 
     <div id="loading">⏳ กำลังโหลดข้อมูล...</div>
     <div id="event-list"></div>
+
+    <!-- Clear at bottom -->
+    <div class="section" style="margin-top:10px">
+      <button class="btn btn-clear" id="clear-data" style="width:100%">🗑 ล้างข้อมูลทั้งหมด</button>
+    </div>
   </div>
 
   <!-- YouTube panel at bottom of sidebar -->
   <div id="youtubeLivePanel">
-    <button class="yt-close-btn" id="closeYoutubeBtn">✕ ปิดวิดีโอ</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:rgba(255,71,87,0.1);border-top:1px solid var(--border)">
+      <span id="yt-channel-label" style="font-size:0.75rem;color:#ff4757;font-weight:600;letter-spacing:0.05em">▶ LIVE</span>
+      <button class="yt-close-btn" id="closeYoutubeBtn" style="width:auto;padding:3px 10px;border-radius:5px;background:rgba(255,71,87,0.2)">✕ ปิด</button>
+    </div>
     <iframe id="youtubeFrame" src="about:blank" title="Live Earthquake Monitoring"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
   </div>
 </div>
@@ -992,20 +1003,33 @@ document.getElementById('excelInput').addEventListener('change', e => { if(e.tar
 // YouTube toggle
 const ytPanel = document.getElementById('youtubeLivePanel');
 const ytFrame = document.getElementById('youtubeFrame');
-const YT_URL  = "https://www.youtube.com/embed/rvtygG4n6ew?enablejsapi=1&autoplay=1";
-document.getElementById('live-monitor-btn').addEventListener('click', () => {
-  if (ytPanel.style.display !== 'block') {
-    ytFrame.src = "about:blank";
-    setTimeout(() => { ytFrame.src = YT_URL; }, 100);
-    ytPanel.style.display = 'block';
-  } else {
+const ytLabel = document.getElementById('yt-channel-label');
+const YT_GLOBALQUAKE = "https://www.youtube.com/embed/rvtygG4n6ew?enablejsapi=1&autoplay=1";
+const YT_JQUAKE      = "https://www.youtube.com/embed/VlueSShT30I?si=Gqf1iBYHMdTL0bGX&autoplay=1";
+
+let currentYtSrc = null;
+
+function openYT(url, label) {
+  if (currentYtSrc === url && ytPanel.style.display === 'block') {
+    // same channel clicked again → close
     ytPanel.style.display = 'none';
-    ytFrame.src = "about:blank";
+    ytFrame.src = 'about:blank';
+    currentYtSrc = null;
+    return;
   }
-});
+  ytFrame.src = 'about:blank';
+  ytLabel.textContent = '▶ ' + label;
+  setTimeout(() => { ytFrame.src = url; }, 100);
+  ytPanel.style.display = 'block';
+  currentYtSrc = url;
+}
+
+document.getElementById('btn-globalquake').addEventListener('click', () => openYT(YT_GLOBALQUAKE, 'GlobalQuake'));
+document.getElementById('btn-jquake').addEventListener('click',      () => openYT(YT_JQUAKE,      'JQuake'));
 document.getElementById('closeYoutubeBtn').addEventListener('click', () => {
   ytPanel.style.display = 'none';
-  ytFrame.src = "about:blank";
+  ytFrame.src = 'about:blank';
+  currentYtSrc = null;
 });
 
 // Layer toggles
